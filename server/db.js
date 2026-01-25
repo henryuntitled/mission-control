@@ -1,21 +1,26 @@
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const dbPath = join(__dirname, '..', 'data', 'tasks.db');
-const dataDir = join(__dirname, '..', 'data');
+// Use /app/data for Railway (persistent volume) or local data folder
+const dataDir = process.env.RAILWAY_ENVIRONMENT 
+  ? '/app/data' 
+  : join(__dirname, 'data');
+
+const dbPath = join(dataDir, 'tasks.db');
 
 // Ensure data directory exists
-import { mkdirSync } from 'fs';
 try {
   mkdirSync(dataDir, { recursive: true });
 } catch (e) {
   // Directory already exists
 }
+
+console.log(`Database path: ${dbPath}`);
 
 const db = new Database(dbPath);
 
@@ -33,6 +38,8 @@ db.exec(`
     assignees TEXT DEFAULT '[]',
     project TEXT DEFAULT '',
     output TEXT DEFAULT '',
+    dueDate TEXT DEFAULT NULL,
+    recurrence TEXT DEFAULT NULL,
     createdAt TEXT DEFAULT (datetime('now')),
     updatedAt TEXT DEFAULT (datetime('now'))
   )
@@ -43,10 +50,13 @@ const count = db.prepare('SELECT COUNT(*) as count FROM tasks').get();
 
 if (count.count === 0) {
   // Try to load initial data from tasks.json
-  const tasksJsonPath = join(__dirname, '..', 'tasks.json');
-  if (existsSync(tasksJsonPath)) {
+  const tasksJsonPath = join(__dirname, 'tasks.json');
+  const altTasksJsonPath = join(__dirname, '..', 'tasks.json');
+  const jsonPath = existsSync(tasksJsonPath) ? tasksJsonPath : altTasksJsonPath;
+  
+  if (existsSync(jsonPath)) {
     try {
-      const initialData = JSON.parse(readFileSync(tasksJsonPath, 'utf-8'));
+      const initialData = JSON.parse(readFileSync(jsonPath, 'utf-8'));
       const insert = db.prepare(`
         INSERT INTO tasks (id, title, description, status, priority, assignees, project, output, createdAt)
         VALUES (@id, @title, @description, @status, @priority, @assignees, @project, @output, @createdAt)

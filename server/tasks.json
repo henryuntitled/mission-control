@@ -1,0 +1,59 @@
+{
+  "tasks": [
+    {
+      "id": "1",
+      "title": "Weekly team standup",
+      "description": "Review progress and blockers with the team",
+      "assignees": ["Zach", "Henry"],
+      "priority": "Medium",
+      "project": "Team",
+      "status": "Recurring",
+      "output": "",
+      "createdAt": "2026-01-20T10:00:00Z"
+    },
+    {
+      "id": "2",
+      "title": "Design system audit",
+      "description": "Review and document all existing UI components",
+      "assignees": ["Henry"],
+      "priority": "Low",
+      "project": "Design",
+      "status": "Backlog",
+      "output": "",
+      "createdAt": "2026-01-22T14:30:00Z"
+    },
+    {
+      "id": "3",
+      "title": "API endpoint optimization",
+      "description": "Improve response times for the dashboard endpoints",
+      "assignees": ["Zach"],
+      "priority": "High",
+      "project": "Backend",
+      "status": "In Progress",
+      "output": "",
+      "createdAt": "2026-01-24T09:00:00Z"
+    },
+    {
+      "id": "4",
+      "title": "User authentication flow",
+      "description": "Implement OAuth 2.0 login with Google and GitHub",
+      "assignees": ["Zach", "Henry"],
+      "priority": "High",
+      "project": "Auth",
+      "status": "In Review",
+      "output": "https://github.com/project/pr/123",
+      "createdAt": "2026-01-23T11:00:00Z"
+    },
+    {
+      "id": "5",
+      "title": "Documentation update",
+      "description": "Update README with new installation instructions",
+      "assignees": ["Henry"],
+      "priority": "Low",
+      "project": "Docs",
+      "status": "Done",
+      "output": "/docs/README.md",
+      "createdAt": "2026-01-19T16:00:00Z"
+    }
+  ]
+}
