@@ -10,7 +10,7 @@ const columnColors = {
   Done: 'bg-green-500',
 };
 
-export function Column({ title, tasks, onTaskClick, onAddTask }) {
+export function Column({ title, tasks, onTaskClick, onAddTask, isMobile = false }) {
   const { setNodeRef, isOver } = useDroppable({
     id: title,
   });
@@ -19,11 +19,15 @@ export function Column({ title, tasks, onTaskClick, onAddTask }) {
 
   return (
     <div 
-      className={`flex flex-col bg-navy-800 rounded-xl min-w-[280px] w-[280px] max-h-[calc(100vh-220px)] transition-all duration-200 ${
+      className={`flex flex-col bg-navy-800 rounded-xl transition-all duration-200 ${
         isOver ? 'ring-2 ring-accent ring-opacity-50 bg-navy-700' : ''
+      } ${
+        isMobile 
+          ? 'w-full min-h-[60vh]' 
+          : 'min-w-[280px] w-[280px] max-h-[calc(100vh-220px)]'
       }`}
     >
-      <div className="flex items-center justify-between p-4 border-b border-navy-700">
+      <div className="flex items-center justify-between p-3 sm:p-4 border-b border-navy-700">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${columnColors[title]}`} />
           <h2 className="text-sm font-semibold text-gray-200">{title}</h2>
@@ -56,7 +60,7 @@ export function Column({ title, tasks, onTaskClick, onAddTask }) {
 
       <div 
         ref={setNodeRef}
-        className={`flex-1 overflow-y-auto p-3 space-y-3 min-h-[100px] ${
+        className={`flex-1 overflow-y-auto p-2 sm:p-3 space-y-2 sm:space-y-3 min-h-[100px] ${
           isOver ? 'bg-accent/5' : ''
         }`}
       >

@@ -4,6 +4,7 @@ import {
   DragOverlay,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   pointerWithin,
@@ -36,11 +37,18 @@ export function KanbanBoard() {
   const [assigneeFilter, setAssigneeFilter] = useState('All');
   const [projectFilter, setProjectFilter] = useState('All');
   const [activeTask, setActiveTask] = useState(null);
+  const [mobileColumn, setMobileColumn] = useState('Backlog');
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
       },
     })
   );
@@ -65,7 +73,6 @@ export function KanbanBoard() {
   };
 
   const handleTaskClick = (task) => {
-    // Don't open modal if we just finished dragging
     if (activeTask) return;
     setEditingTask(task);
     setModalOpen(true);
@@ -122,7 +129,6 @@ export function KanbanBoard() {
     
     if (!task) return;
 
-    // Check if dropped on a column
     if (COLUMNS.includes(over.id)) {
       if (task.status !== over.id) {
         moveTask(taskId, over.id);
@@ -130,7 +136,6 @@ export function KanbanBoard() {
       return;
     }
 
-    // Check if dropped on another task
     const overTask = tasks.find((t) => t.id === over.id);
     if (overTask && task.status !== overTask.status) {
       moveTask(taskId, overTask.status);
@@ -147,24 +152,19 @@ export function KanbanBoard() {
     
     if (!task) return;
 
-    // If over a column, update preview
     if (COLUMNS.includes(over.id)) {
       return;
     }
 
-    // If over another task, check its column
     const overTask = tasks.find((t) => t.id === over.id);
     if (overTask) {
       return;
     }
   };
 
-  // Custom collision detection that prefers columns
   const collisionDetection = (args) => {
-    // First check for intersections with columns
     const pointerCollisions = pointerWithin(args);
     if (pointerCollisions.length > 0) {
-      // Prefer column collisions
       const columnCollision = pointerCollisions.find(c => COLUMNS.includes(c.id));
       if (columnCollision) {
         return [columnCollision];
@@ -190,18 +190,39 @@ export function KanbanBoard() {
       onDragEnd={handleDragEnd}
       onDragOver={handleDragOver}
     >
-      <div className="min-h-screen bg-navy-900 p-6">
-        <header className="mb-6">
-          <div className="flex items-center justify-between mb-6">
+      <div className="min-h-screen bg-navy-900 p-3 sm:p-6">
+        <header className="mb-4 sm:mb-6">
+          {/* Mobile Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+              <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 sm:gap-3">
                 <span className="text-accent">⬡</span>
                 Mission Control
               </h1>
-              <p className="text-sm text-gray-500 mt-1">Track and manage your team's tasks</p>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">Track and manage your tasks</p>
             </div>
-            <StatsBar stats={stats} />
+            {/* Hide stats on mobile, show on sm+ */}
+            <div className="hidden sm:block">
+              <StatsBar stats={stats} />
+            </div>
           </div>
+
+          {/* Mobile Stats - compact version */}
+          <div className="flex sm:hidden gap-2 mb-4 text-xs">
+            <div className="flex-1 bg-navy-800 rounded-lg px-3 py-2 text-center">
+              <p className="text-gray-500">In Progress</p>
+              <p className="text-white font-semibold">{stats.inProgress}</p>
+            </div>
+            <div className="flex-1 bg-navy-800 rounded-lg px-3 py-2 text-center">
+              <p className="text-gray-500">Total</p>
+              <p className="text-white font-semibold">{stats.total}</p>
+            </div>
+            <div className="flex-1 bg-navy-800 rounded-lg px-3 py-2 text-center">
+              <p className="text-gray-500">Done</p>
+              <p className="text-white font-semibold">{stats.completion}%</p>
+            </div>
+          </div>
+
           <FilterBar
             assigneeFilter={assigneeFilter}
             setAssigneeFilter={setAssigneeFilter}
@@ -212,7 +233,28 @@ export function KanbanBoard() {
           />
         </header>
 
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        {/* Mobile Column Tabs */}
+        <div className="flex sm:hidden gap-1 mb-4 overflow-x-auto pb-2">
+          {COLUMNS.map((column) => {
+            const count = getColumnTasks(column).length;
+            return (
+              <button
+                key={column}
+                onClick={() => setMobileColumn(column)}
+                className={`px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                  mobileColumn === column
+                    ? 'bg-accent text-white'
+                    : 'bg-navy-800 text-gray-400'
+                }`}
+              >
+                {column} ({count})
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Desktop: All columns */}
+        <div className="hidden sm:flex gap-4 overflow-x-auto pb-4">
           {COLUMNS.map((column) => (
             <Column
               key={column}
@@ -222,6 +264,17 @@ export function KanbanBoard() {
               onAddTask={handleAddTask}
             />
           ))}
+        </div>
+
+        {/* Mobile: Single column */}
+        <div className="sm:hidden">
+          <Column
+            title={mobileColumn}
+            tasks={getColumnTasks(mobileColumn)}
+            onTaskClick={handleTaskClick}
+            onAddTask={handleAddTask}
+            isMobile
+          />
         </div>
 
         <DragOverlay>
