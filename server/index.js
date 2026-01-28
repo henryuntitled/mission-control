@@ -6,15 +6,74 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
-// Helper to parse/stringify assignees
+// ============================================================================
+// Helpers
+// ============================================================================
+
 const parseTask = (row) => ({
   ...row,
   assignees: JSON.parse(row.assignees || '[]'),
 });
 
 const serializeAssignees = (assignees) => JSON.stringify(assignees || []);
+
+const VALID_STATUSES = ['Recurring', 'Backlog', 'In Progress', 'In Review', 'Done'];
+const VALID_PRIORITIES = ['High', 'Medium', 'Low'];
+const VALID_RECURRENCES = ['daily', 'weekly', 'biweekly', 'monthly', null];
+
+// Input validation
+function validateTask(body, isPartial = false) {
+  const errors = [];
+
+  if (!isPartial && (!body.title || typeof body.title !== 'string' || !body.title.trim())) {
+    errors.push('Title is required');
+  }
+
+  if (body.title !== undefined) {
+    if (typeof body.title !== 'string') errors.push('Title must be a string');
+    else if (body.title.length > 500) errors.push('Title must be 500 characters or less');
+  }
+
+  if (body.description !== undefined) {
+    if (typeof body.description !== 'string') errors.push('Description must be a string');
+    else if (body.description.length > 5000) errors.push('Description must be 5000 characters or less');
+  }
+
+  if (body.status !== undefined && !VALID_STATUSES.includes(body.status)) {
+    errors.push(`Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`);
+  }
+
+  if (body.priority !== undefined && !VALID_PRIORITIES.includes(body.priority)) {
+    errors.push(`Invalid priority. Must be one of: ${VALID_PRIORITIES.join(', ')}`);
+  }
+
+  if (body.assignees !== undefined) {
+    if (!Array.isArray(body.assignees)) errors.push('Assignees must be an array');
+    else if (body.assignees.some(a => typeof a !== 'string')) errors.push('Each assignee must be a string');
+  }
+
+  if (body.recurrence !== undefined && body.recurrence !== null && !VALID_RECURRENCES.includes(body.recurrence)) {
+    errors.push(`Invalid recurrence. Must be one of: ${VALID_RECURRENCES.filter(Boolean).join(', ')}`);
+  }
+
+  if (body.project !== undefined && typeof body.project !== 'string') {
+    errors.push('Project must be a string');
+  }
+
+  if (body.output !== undefined && typeof body.output !== 'string') {
+    errors.push('Output must be a string');
+  }
+
+  if (body.dueDate !== undefined && body.dueDate !== null) {
+    if (typeof body.dueDate !== 'string' || (body.dueDate && !/^\d{4}-\d{2}-\d{2}/.test(body.dueDate))) {
+      errors.push('Due date must be in YYYY-MM-DD format');
+    }
+  }
+
+  return errors;
+}
 
 // Helper to calculate next due date based on recurrence
 const getNextDueDate = (currentDueDate, recurrence) => {
@@ -42,6 +101,10 @@ const getNextDueDate = (currentDueDate, recurrence) => {
   
   return date.toISOString().split('T')[0];
 };
+
+// ============================================================================
+// Routes
+// ============================================================================
 
 // GET all tasks
 app.get('/api/tasks', (req, res) => {
@@ -71,6 +134,11 @@ app.get('/api/tasks/:id', (req, res) => {
 // POST create task
 app.post('/api/tasks', (req, res) => {
   try {
+    const errors = validateTask(req.body);
+    if (errors.length > 0) {
+      return res.status(400).json({ error: 'Validation failed', details: errors });
+    }
+
     const { title, description, status, priority, assignees, project, output, dueDate, recurrence } = req.body;
     const id = Date.now().toString();
     const createdAt = new Date().toISOString();
@@ -80,13 +148,13 @@ app.post('/api/tasks', (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
-      title,
-      description || '',
+      title.trim(),
+      (description || '').trim(),
       status || 'Backlog',
       priority || 'Medium',
       serializeAssignees(assignees),
-      project || '',
-      output || '',
+      (project || '').trim(),
+      (output || '').trim(),
       dueDate || null,
       recurrence || null,
       createdAt,
@@ -104,6 +172,11 @@ app.post('/api/tasks', (req, res) => {
 // PUT update task
 app.put('/api/tasks/:id', (req, res) => {
   try {
+    const errors = validateTask(req.body);
+    if (errors.length > 0) {
+      return res.status(400).json({ error: 'Validation failed', details: errors });
+    }
+
     const { title, description, status, priority, assignees, project, output, dueDate, recurrence } = req.body;
     const updatedAt = new Date().toISOString();
 
@@ -117,13 +190,13 @@ app.put('/api/tasks/:id', (req, res) => {
       SET title = ?, description = ?, status = ?, priority = ?, assignees = ?, project = ?, output = ?, dueDate = ?, recurrence = ?, updatedAt = ?
       WHERE id = ?
     `).run(
-      title ?? existing.title,
-      description ?? existing.description,
+      (title ?? existing.title).trim?.() ?? existing.title,
+      (description ?? existing.description).trim?.() ?? existing.description,
       status ?? existing.status,
       priority ?? existing.priority,
       assignees !== undefined ? serializeAssignees(assignees) : existing.assignees,
-      project ?? existing.project,
-      output ?? existing.output,
+      (project ?? existing.project).trim?.() ?? existing.project,
+      (output ?? existing.output).trim?.() ?? existing.output,
       dueDate !== undefined ? dueDate : existing.dueDate,
       recurrence !== undefined ? recurrence : existing.recurrence,
       updatedAt,
@@ -141,6 +214,11 @@ app.put('/api/tasks/:id', (req, res) => {
 // PATCH update task (partial update - useful for moving tasks)
 app.patch('/api/tasks/:id', (req, res) => {
   try {
+    const errors = validateTask(req.body, true);
+    if (errors.length > 0) {
+      return res.status(400).json({ error: 'Validation failed', details: errors });
+    }
+
     const updates = req.body;
     const updatedAt = new Date().toISOString();
 
@@ -184,11 +262,11 @@ app.patch('/api/tasks/:id', (req, res) => {
 
     if (updates.title !== undefined) {
       fields.push('title = ?');
-      values.push(updates.title);
+      values.push(updates.title.trim?.() ?? updates.title);
     }
     if (updates.description !== undefined) {
       fields.push('description = ?');
-      values.push(updates.description);
+      values.push(updates.description.trim?.() ?? updates.description);
     }
     if (updates.status !== undefined) {
       fields.push('status = ?');
@@ -204,11 +282,11 @@ app.patch('/api/tasks/:id', (req, res) => {
     }
     if (updates.project !== undefined) {
       fields.push('project = ?');
-      values.push(updates.project);
+      values.push(updates.project.trim?.() ?? updates.project);
     }
     if (updates.output !== undefined) {
       fields.push('output = ?');
-      values.push(updates.output);
+      values.push(updates.output.trim?.() ?? updates.output);
     }
     if (updates.dueDate !== undefined) {
       fields.push('dueDate = ?');
@@ -266,7 +344,11 @@ app.delete('/api/tasks/:id', (req, res) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    taskCount: db.prepare('SELECT COUNT(*) as count FROM tasks').get().count,
+  });
 });
 
 app.listen(PORT, () => {

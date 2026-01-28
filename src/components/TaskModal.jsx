@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const STATUSES = ['Recurring', 'Backlog', 'In Progress', 'In Review', 'Done'];
 const PRIORITIES = ['High', 'Medium', 'Low'];
@@ -23,6 +23,8 @@ export function TaskModal({ task, onSave, onDelete, onClose, projects }) {
     dueDate: '',
     recurrence: '',
   });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const modalRef = useRef(null);
 
   useEffect(() => {
     if (task) {
@@ -39,6 +41,28 @@ export function TaskModal({ task, onSave, onDelete, onClose, projects }) {
       });
     }
   }, [task]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (confirmDelete) {
+          setConfirmDelete(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, confirmDelete]);
+
+  // Close on backdrop click
+  const handleBackdropClick = (e) => {
+    if (e.target === modalRef.current) {
+      onClose();
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -59,6 +83,15 @@ export function TaskModal({ task, onSave, onDelete, onClose, projects }) {
     }));
   };
 
+  const handleDeleteClick = () => {
+    if (confirmDelete) {
+      onDelete(task.id);
+      setConfirmDelete(false);
+    } else {
+      setConfirmDelete(true);
+    }
+  };
+
   const isEditing = !!task?.id;
 
   // Quick date buttons
@@ -69,20 +102,27 @@ export function TaskModal({ task, onSave, onDelete, onClose, projects }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div 
+      ref={modalRef}
+      onClick={handleBackdropClick}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
       <div className="bg-navy-800 rounded-2xl w-full max-w-lg border border-navy-600 shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-navy-700 sticky top-0 bg-navy-800">
+        <div className="flex items-center justify-between p-5 border-b border-navy-700 sticky top-0 bg-navy-800 rounded-t-2xl">
           <h2 className="text-lg font-semibold text-white">
             {isEditing ? 'Edit Task' : 'New Task'}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors p-1"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 hidden sm:inline">ESC to close</span>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white transition-colors p-1"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -265,13 +305,35 @@ export function TaskModal({ task, onSave, onDelete, onClose, projects }) {
 
           <div className="flex gap-3 pt-2">
             {isEditing && onDelete && (
-              <button
-                type="button"
-                onClick={() => onDelete(task.id)}
-                className="px-4 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
-              >
-                Delete
-              </button>
+              <>
+                {confirmDelete ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-red-400">Delete this task?</span>
+                    <button
+                      type="button"
+                      onClick={handleDeleteClick}
+                      className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                    >
+                      Yes, Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleDeleteClick}
+                    className="px-4 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                  >
+                    Delete
+                  </button>
+                )}
+              </>
             )}
             <div className="flex-1" />
             <button
