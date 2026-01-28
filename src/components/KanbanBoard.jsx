@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -14,6 +14,7 @@ import { Column } from './Column';
 import { TaskModal } from './TaskModal';
 import { StatsBar } from './StatsBar';
 import { FilterBar } from './FilterBar';
+import { Toast } from './Toast';
 import { useTasks } from '../hooks/useTasks';
 import { TaskCard } from './TaskCard';
 
@@ -23,6 +24,7 @@ export function KanbanBoard() {
   const {
     tasks,
     loading,
+    error,
     addTask,
     updateTask,
     deleteTask,
@@ -36,8 +38,19 @@ export function KanbanBoard() {
   const [defaultStatus, setDefaultStatus] = useState('Backlog');
   const [assigneeFilter, setAssigneeFilter] = useState('All');
   const [projectFilter, setProjectFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeTask, setActiveTask] = useState(null);
   const [mobileColumn, setMobileColumn] = useState('Backlog');
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = useCallback((message, type = 'error') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+  }, []);
+
+  const removeToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -64,9 +77,18 @@ export function KanbanBoard() {
       if (projectFilter !== 'All' && task.project !== projectFilter) {
         return false;
       }
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchesTitle = task.title?.toLowerCase().includes(query);
+        const matchesDesc = task.description?.toLowerCase().includes(query);
+        const matchesProject = task.project?.toLowerCase().includes(query);
+        if (!matchesTitle && !matchesDesc && !matchesProject) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [tasks, assigneeFilter, projectFilter]);
+  }, [tasks, assigneeFilter, projectFilter, searchQuery]);
 
   const getColumnTasks = (status) => {
     return filteredTasks.filter((task) => task.status === status);
@@ -90,20 +112,31 @@ export function KanbanBoard() {
     setModalOpen(true);
   };
 
-  const handleSave = (formData) => {
-    if (editingTask?.id) {
-      updateTask(editingTask.id, formData);
-    } else {
-      addTask(formData);
+  const handleSave = async (formData) => {
+    try {
+      if (editingTask?.id) {
+        await updateTask(editingTask.id, formData);
+        addToast('Task updated', 'success');
+      } else {
+        await addTask(formData);
+        addToast('Task created', 'success');
+      }
+      setModalOpen(false);
+      setEditingTask(null);
+    } catch (err) {
+      addToast(`Failed to save task: ${err.message}`);
     }
-    setModalOpen(false);
-    setEditingTask(null);
   };
 
-  const handleDelete = (id) => {
-    deleteTask(id);
-    setModalOpen(false);
-    setEditingTask(null);
+  const handleDelete = async (id) => {
+    try {
+      await deleteTask(id);
+      addToast('Task deleted', 'success');
+      setModalOpen(false);
+      setEditingTask(null);
+    } catch (err) {
+      addToast(`Failed to delete task: ${err.message}`);
+    }
   };
 
   const handleCloseModal = () => {
@@ -191,6 +224,30 @@ export function KanbanBoard() {
       onDragOver={handleDragOver}
     >
       <div className="min-h-screen bg-navy-900 p-3 sm:p-6">
+        {/* Toast notifications */}
+        {toasts.map((toast) => (
+          <Toast
+            key={toast.id}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => removeToast(toast.id)}
+          />
+        ))}
+
+        {/* Error banner for connection issues */}
+        {error && (
+          <div className="mb-4 px-4 py-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-sm flex items-center gap-2">
+            <span>⚠️</span>
+            <span>Connection issue: {error}</span>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="ml-auto text-red-300 hover:text-white underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         <header className="mb-4 sm:mb-6">
           {/* Mobile Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
@@ -230,6 +287,8 @@ export function KanbanBoard() {
             setProjectFilter={setProjectFilter}
             projects={projects}
             onNewTask={handleNewTask}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
           />
         </header>
 
@@ -252,6 +311,19 @@ export function KanbanBoard() {
             );
           })}
         </div>
+
+        {/* Search results indicator */}
+        {searchQuery.trim() && (
+          <div className="mb-3 text-sm text-gray-400 flex items-center gap-2">
+            <span>🔍 Showing {filteredTasks.length} result{filteredTasks.length !== 1 ? 's' : ''} for "{searchQuery}"</span>
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="text-accent hover:text-accent-light underline"
+            >
+              Clear
+            </button>
+          </div>
+        )}
 
         {/* Desktop: All columns */}
         <div className="hidden sm:flex gap-4 overflow-x-auto pb-4">
